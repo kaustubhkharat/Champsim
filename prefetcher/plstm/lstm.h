@@ -3,9 +3,13 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <string>
+#include <cstring>
+#include "cnpy.h"
 
 #define LSTM_INPUT_SIZE 32
 #define LSTM_HIDDEN_SIZE 32
+#define LSTM_OUTPUT_SIZE 8
 
 static inline double sigmoid(double x) {
     return 1.0 / (1.0 + exp(-x));
@@ -15,9 +19,11 @@ class LSTM {
 public:
     double W_ih[LSTM_INPUT_SIZE][4 * LSTM_HIDDEN_SIZE];
     double W_hh[LSTM_HIDDEN_SIZE][4 * LSTM_HIDDEN_SIZE];
+    double W_out[LSTM_OUTPUT_SIZE][LSTM_HIDDEN_SIZE];
 
     double b_ih[4 * LSTM_HIDDEN_SIZE];
     double b_hh[4 * LSTM_HIDDEN_SIZE];
+    double b_out[LSTM_OUTPUT_SIZE];
 
     double h[LSTM_HIDDEN_SIZE];     // hidden state
     double c[LSTM_HIDDEN_SIZE];     // cell state
@@ -29,7 +35,67 @@ public:
         }
     }
 
-    void predict(const double x[LSTM_INPUT_SIZE], double out[LSTM_HIDDEN_SIZE]) {
+    void load_npy_matrix(const std::string& path, double* dst, size_t rows, size_t cols)
+    {
+        cnpy::NpyArray arr = cnpy::npy_load(path);
+        double* data = arr.data<double>();
+
+        if (arr.shape.size() != 2 ||
+            arr.shape[1] != rows ||
+            arr.shape[0] != cols)
+        {
+            std::cout<<"W_ih dimensions: "<<LSTM_INPUT_SIZE<<"x"<<4*LSTM_HIDDEN_SIZE<<'\n';
+            std::cout<<"Array dimension: "<<arr.shape[0]<<"x"<<arr.shape[1]<<std::endl;
+            throw std::runtime_error("Shape mismatch in " + path);
+        }
+
+        memcpy(dst, data, sizeof(double) * rows * cols);
+    }
+
+    void load_npy_vector(const std::string& path, double* dst, size_t count)
+    {
+        cnpy::NpyArray arr = cnpy::npy_load(path);
+        double* data = arr.data<double>();
+
+        if (arr.shape.size() != 1 ||
+            arr.shape[0] != count)
+        {
+            throw std::runtime_error("Shape mismatch in " + path);
+        }
+
+        memcpy(dst, data, sizeof(double) * count);
+    }
+
+    void initialise_from_folder(const std::string folder) {
+        load_npy_matrix(folder + "/W_ih.npy",
+                        &W_ih[0][0],
+                        LSTM_INPUT_SIZE,
+                        4 * LSTM_HIDDEN_SIZE);
+
+        load_npy_matrix(folder + "/W_hh.npy",
+                        &W_hh[0][0],
+                        LSTM_HIDDEN_SIZE,
+                        4 * LSTM_HIDDEN_SIZE);
+
+        load_npy_vector(folder + "/b_ih.npy",
+                        b_ih,
+                        4 * LSTM_HIDDEN_SIZE);
+
+        load_npy_vector(folder + "/b_hh.npy",
+                        b_hh,
+                        4 * LSTM_HIDDEN_SIZE);
+
+        load_npy_vector(folder + "/b_out.npy",
+                        b_out,
+                        LSTM_OUTPUT_SIZE);
+
+        load_npy_matrix(folder + "/W_out.npy",
+                        &W_out[0][0],
+                        LSTM_HIDDEN_SIZE,
+                        LSTM_OUTPUT_SIZE);
+    }
+
+    void predict(const double x[LSTM_INPUT_SIZE], double out[LSTM_OUTPUT_SIZE]) {
 
         double gates[4 * LSTM_HIDDEN_SIZE];
 
@@ -71,8 +137,13 @@ public:
         }
 
         // ---------- 4. Output hidden ----------
-        for(int k=0;k<LSTM_HIDDEN_SIZE;k++)
-            out[k] = h[k];
+        for (int i = 0; i < LSTM_OUTPUT_SIZE; i++) {
+            double sum = 0.0;
+            for (int j = 0; j < LSTM_HIDDEN_SIZE; j++) {
+                sum += W_out[i][j] * h[j];
+            }
+            out[i] = sum + b_out[i];
+        }
     }
 };
 
