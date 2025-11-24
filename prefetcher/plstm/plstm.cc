@@ -12,11 +12,12 @@ uint32_t plstm::prefetcher_cache_operate(champsim::address addr, champsim::addre
 {
   // assert(addr == ip); // Invariant for instruction prefetchers
   auto found = stride_table.check_hit(tracker_entry{ip, ip, type, {}});
-  if (found.has_value()){
+  if (found){
     auto stride = champsim::offset(addr, found->last_address);
     float diff = (stride - mean)/std;
     if (found->history.size() < LSTM_INPUT_SIZE) {
       found->history.push_back(diff);
+      stride_table.fill(tracker_entry{ip, addr, type, found->history});
       return metadata_in;
     }
     found->history.pop_front();
@@ -27,10 +28,12 @@ uint32_t plstm::prefetcher_cache_operate(champsim::address addr, champsim::addre
       x = x*std + mean;
       x = pow(2, x) - 1;
     }
+    stride_table.fill(tracker_entry{ip, addr, type, found->history});
     champsim::address addr_cp = addr;
-    for (auto x:out) {
-      addr_cp += champsim::address::difference_type{(int)round(x)};
-      prefetch_line(addr_cp, true, metadata_in);
+    for (auto &x:out) {
+      if ((int64_t)round(abs(x)) > 4096) x = x < 0 ? -4096 : 4096;
+      addr_cp += champsim::address::difference_type{(int64_t)round(x)};
+      prefetch_line(addr_cp, (intern_->get_mshr_occupancy_ratio() <= 0.5), metadata_in);
     }
   } else {
     stride_table.fill(tracker_entry{ip, addr, type, {}});

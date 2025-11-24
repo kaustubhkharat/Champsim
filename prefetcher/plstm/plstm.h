@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <queue>
 #include <vector>
+#include <fstream>
 
 #include "champsim.h"
 #include "modules.h"
@@ -12,11 +13,10 @@
 
 class plstm : public champsim::modules::prefetcher
 {
-
-  constexpr static int TABLE_WAYS = 128;
-  constexpr static int TABLE_SETS = 8;
+  constexpr static int TABLE_WAYS = 256;
+  constexpr static int TABLE_SETS = 4;
   LSTM<float> lstm{};
-  constexpr static double mean=0.2185, std=16.2121;
+  constexpr static double mean=0.3933, std=16.1071;
 
   struct tracker_entry {
     champsim::address ip{};
@@ -26,12 +26,12 @@ class plstm : public champsim::modules::prefetcher
 
     auto index() const {
       using namespace champsim::data::data_literals;
-      return ip.slice_upper<48_b>();
+      return ip.slice_upper<32_b>();
     }
 
     auto tag() const {
       using namespace champsim::data::data_literals;
-      return std::make_pair<>(ip.slice_upper<48_b>(), atype);
+      return std::make_pair<>(ip.slice_upper<32_b>(), atype);
     }
   };
   champsim::msl::lru_table<tracker_entry> stride_table{TABLE_WAYS, TABLE_SETS};

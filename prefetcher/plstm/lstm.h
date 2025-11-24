@@ -9,7 +9,7 @@
 
 #define LSTM_INPUT_SIZE 4
 #define LSTM_HIDDEN_SIZE 128
-#define LSTM_OUTPUT_SIZE 1
+#define LSTM_OUTPUT_SIZE 4
 
 
 template <typename T>
