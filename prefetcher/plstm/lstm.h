@@ -7,26 +7,24 @@
 #include <cstring>
 #include "cnpy.h"
 
-#define LSTM_INPUT_SIZE 32
-#define LSTM_HIDDEN_SIZE 32
-#define LSTM_OUTPUT_SIZE 8
+#define LSTM_INPUT_SIZE 4
+#define LSTM_HIDDEN_SIZE 128
+#define LSTM_OUTPUT_SIZE 1
 
-static inline double sigmoid(double x) {
-    return 1.0 / (1.0 + exp(-x));
-}
 
+template <typename T>
 class LSTM {
 public:
-    double W_ih[LSTM_INPUT_SIZE][4 * LSTM_HIDDEN_SIZE];
-    double W_hh[LSTM_HIDDEN_SIZE][4 * LSTM_HIDDEN_SIZE];
-    double W_out[LSTM_OUTPUT_SIZE][LSTM_HIDDEN_SIZE];
+    T W_ih[LSTM_INPUT_SIZE][4 * LSTM_HIDDEN_SIZE];
+    T W_hh[LSTM_HIDDEN_SIZE][4 * LSTM_HIDDEN_SIZE];
+    T W_out[LSTM_OUTPUT_SIZE][LSTM_HIDDEN_SIZE];
 
-    double b_ih[4 * LSTM_HIDDEN_SIZE];
-    double b_hh[4 * LSTM_HIDDEN_SIZE];
-    double b_out[LSTM_OUTPUT_SIZE];
+    T b_ih[4 * LSTM_HIDDEN_SIZE];
+    T b_hh[4 * LSTM_HIDDEN_SIZE];
+    T b_out[LSTM_OUTPUT_SIZE];
 
-    double h[LSTM_HIDDEN_SIZE];     // hidden state
-    double c[LSTM_HIDDEN_SIZE];     // cell state
+    T h[LSTM_HIDDEN_SIZE];     // hidden state
+    T c[LSTM_HIDDEN_SIZE];     // cell state
 
     LSTM() {
         for(int i=0;i<LSTM_HIDDEN_SIZE;i++){
@@ -34,11 +32,12 @@ public:
             c[i] = 0.0;
         }
     }
+    static inline T sigmoid(T x) { return 1.0 / (1.0 + exp(-x)); }
 
-    void load_npy_matrix(const std::string& path, double* dst, size_t rows, size_t cols)
+    void load_npy_matrix(const std::string& path, T* dst, size_t rows, size_t cols)
     {
         cnpy::NpyArray arr = cnpy::npy_load(path);
-        double* data = arr.data<double>();
+        T* data = arr.data<T>();
 
         if (arr.shape.size() != 2 ||
             arr.shape[1] != rows ||
@@ -49,13 +48,13 @@ public:
             throw std::runtime_error("Shape mismatch in " + path);
         }
 
-        memcpy(dst, data, sizeof(double) * rows * cols);
+        memcpy(dst, data, sizeof(T) * rows * cols);
     }
 
-    void load_npy_vector(const std::string& path, double* dst, size_t count)
+    void load_npy_vector(const std::string& path, T* dst, size_t count)
     {
         cnpy::NpyArray arr = cnpy::npy_load(path);
-        double* data = arr.data<double>();
+        T* data = arr.data<T>();
 
         if (arr.shape.size() != 1 ||
             arr.shape[0] != count)
@@ -63,7 +62,7 @@ public:
             throw std::runtime_error("Shape mismatch in " + path);
         }
 
-        memcpy(dst, data, sizeof(double) * count);
+        memcpy(dst, data, sizeof(T) * count);
     }
 
     void initialise_from_folder(const std::string folder) {
@@ -93,18 +92,19 @@ public:
                         &W_out[0][0],
                         LSTM_HIDDEN_SIZE,
                         LSTM_OUTPUT_SIZE);
+        
     }
 
-    void predict(const double x[LSTM_INPUT_SIZE], double out[LSTM_OUTPUT_SIZE]) {
+    void predict(T *x, T out[LSTM_OUTPUT_SIZE]) {
 
-        double gates[4 * LSTM_HIDDEN_SIZE];
+        T gates[4 * LSTM_HIDDEN_SIZE];
 
         // ---------- 1. Compute gates (W_ih x + b_ih) ----------
         for (int g = 0; g < 4 * LSTM_HIDDEN_SIZE; g++)
             gates[g] = b_ih[g];
 
         for (int j = 0; j < LSTM_INPUT_SIZE; j++) {
-            double v = x[j];
+            T v = x[j];
             for (int g = 0; g < 4 * LSTM_HIDDEN_SIZE; g++)
                 gates[g] += v * W_ih[j][g];
         }
@@ -114,16 +114,16 @@ public:
             gates[g] += b_hh[g];
 
         for (int j = 0; j < LSTM_HIDDEN_SIZE; j++) {
-            double v = h[j];
+            T v = h[j];
             for (int g = 0; g < 4 * LSTM_HIDDEN_SIZE; g++)
                 gates[g] += v * W_hh[j][g];
         }
 
         // Split gates into i, f, g, o
-        double* i_t = gates;
-        double* f_t = gates + LSTM_HIDDEN_SIZE;
-        double* g_t = gates + 2 * LSTM_HIDDEN_SIZE;
-        double* o_t = gates + 3 * LSTM_HIDDEN_SIZE;
+        T* i_t = gates;
+        T* f_t = gates + LSTM_HIDDEN_SIZE;
+        T* g_t = gates + 2 * LSTM_HIDDEN_SIZE;
+        T* o_t = gates + 3 * LSTM_HIDDEN_SIZE;
 
         // ---------- 3. Apply activations & update cell ----------
         for (int k = 0; k < LSTM_HIDDEN_SIZE; k++) {
@@ -138,7 +138,7 @@ public:
 
         // ---------- 4. Output hidden ----------
         for (int i = 0; i < LSTM_OUTPUT_SIZE; i++) {
-            double sum = 0.0;
+            T sum = 0.0;
             for (int j = 0; j < LSTM_HIDDEN_SIZE; j++) {
                 sum += W_out[i][j] * h[j];
             }
